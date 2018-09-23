@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+<connection>
+    <subprotocol>postgresql</subprotocol>
+    <ip>127.0.0.1</ip>
+    <port>5432</port>
+    <name></name>                       <!--name of db. If empty then create db-->
+</connection>
+
+<user>
+    <name>postgres</name>
+    <password>sa</password>
+</user>
+</configuration>

@@ -1,6 +1,7 @@
 package servlets;
 
 import entity.User;
+import helpers.DBHelper;
 import services.AuthorizationService;
 
 import javax.servlet.RequestDispatcher;
@@ -25,6 +26,8 @@ public class MainPage extends HttpServlet{
         ServletContext servletContext = null;
         RequestDispatcher requestDispatcher = null;
         SimpleDateFormat simpleDateFormat = null;
+
+        DBHelper.getConnection();
 
         httpSession = request.getSession();
         try {

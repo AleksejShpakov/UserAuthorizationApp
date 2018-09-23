@@ -13,8 +13,16 @@ public final class AuthorizationService {
     private AuthorizationService(){}
 
     public static AuthorizationService getInstance(){
-        if(instance == null)
+        if(instance == null) {
             instance = new AuthorizationService();
+
+            try {
+                Class.forName("org.postgresql.Driver");
+            } catch (ClassNotFoundException e) {
+                e.printStackTrace();
+            }
+        }
+
         return instance;
     }
 
