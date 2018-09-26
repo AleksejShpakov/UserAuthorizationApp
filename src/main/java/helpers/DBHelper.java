@@ -1,5 +1,7 @@
 package helpers;
 
+import constants.DBTables;
+import entity.User;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -8,12 +10,15 @@ import org.xml.sax.SAXException;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.*;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
+import java.sql.*;
+import java.util.HashMap;
+import java.util.Map;
 
 public class DBHelper {
     private static String subprotocol = "";
@@ -27,11 +32,16 @@ public class DBHelper {
     private DBHelper(){}
 
     static{
-        init();
+        initDBConfig();
+        loadDBDriver();
+        if(dbName == null || dbName.equals("")){
+            createDB();
+        }
+        createTables();
     }
 
-    private static void init(){
-        File file = null;
+    private static void initDBConfig(){
+        File file;
 
         try {
             file = ConfigHelper.getConfigFile("dbconfig.xml");
@@ -39,10 +49,15 @@ public class DBHelper {
             file = null;
         }
 
+        if(file == null){
+            System.err.println("Init DB failed!");
+            return;
+        }
+
         try {
             DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory.newInstance();
             DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
-            Document document = null;
+            Document document;
             document = documentBuilder.parse(file);
             Element configurationNode = document.getDocumentElement();
 
@@ -82,40 +97,170 @@ public class DBHelper {
             userPassword = XMLHelper.getTagValue("password", tmpNode);
             //</Get user name and password>
 
-        } catch (SAXException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (ParserConfigurationException e) {
+            connectionURI = "jdbc:" + subprotocol + "://" + ip + ":" + port + "/" + dbName;
+        } catch (SAXException | ParserConfigurationException | IOException e) {
             e.printStackTrace();
         }
+    }
 
-        System.out.println("subprotocol -> " + subprotocol);
-        System.out.println("ip -> " + ip);
-        System.out.println("port -> " + port);
-        System.out.println("dbName -> " + dbName);
-        System.out.println("userName -> " + userName);
-        System.out.println("userPassword -> " + userPassword);
-
+    private static void loadDBDriver(){
         try {
             Class.forName("org.postgresql.Driver");
         } catch (ClassNotFoundException e) {
             e.printStackTrace();
         }
+    }
 
-        connectionURI = "jdbc:" + subprotocol + "://" + ip + ":" + port + "/" + dbName;
+    private static void createDB(){
+        Connection connection = null;
+        Statement statement;
+        File file = null;
+
+        dbName = "user_authorization_app";
+
         try {
-            Connection connection = DriverManager.getConnection(connectionURI, userName, userPassword);
-            System.out.println("connection -> " + connection);
+            connection = getConnection();
+            statement = connection.createStatement();
+            statement.executeUpdate("CREATE DATABASE " + dbName);
         } catch (SQLException e) {
+            e.printStackTrace();
+        }finally {
+            try {
+                if(connection != null){
+                    connection.close();
+                }
+
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+
+        try {
+            file = ConfigHelper.getConfigFile("dbconfig.xml");
+        }catch(FileNotFoundException | NullPointerException ex){
+            ex.printStackTrace();
+        }
+
+        if(file == null){
+            System.err.println("Create DB failed! dbconfig.xml not found");
+            return;
+        }
+
+        try{
+            DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory.newInstance();
+            DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
+            Document document = documentBuilder.parse(file);
+            Element configurationNode = document.getDocumentElement();
+
+            Node tmpNode = configurationNode.getElementsByTagName("connection").item(0);
+            XMLHelper.setTagValue("name", dbName, tmpNode);
+
+            //<Save new settings to file>
+            TransformerFactory transformerFactory = TransformerFactory.newInstance();
+            Transformer transformer = transformerFactory.newTransformer();
+            DOMSource domSource = new DOMSource(document);
+            Result result = new StreamResult(file);
+            transformer.transform(domSource, result);
+            //</Save new settings to file>
+        } catch (SAXException | IOException | ParserConfigurationException | TransformerException e) {
             e.printStackTrace();
         }
 
-        //TODO: check db name and if the db name is null then create it
-        //TODO: check tables in db. If tables has not exists then create it
+        connectionURI += dbName;
     }
 
-    public static Connection getConnection(){
+    private static void createTables(){
+        Map<DBTables, Boolean> tableExistsMap = new HashMap<>();
+        Connection connection = null;
+        Statement statement;
+        DatabaseMetaData databaseMetaData;
+        ResultSet resultSet = null;
+        DBTables dbTable;
+
+        for(DBTables table : DBTables.values()){
+            tableExistsMap.put(table, false);
+        }
+
+        try {
+            connection = getConnection();
+            databaseMetaData = connection.getMetaData();
+            resultSet = databaseMetaData.getTables(null, null, null, new String[]{"TABLE"});
+            while(resultSet.next()){
+
+                try {
+                    dbTable = DBTables.valueOf(resultSet.getString("TABLE_NAME").toUpperCase());
+                }catch(IllegalArgumentException ex){
+                    continue;
+                }
+
+                if(tableExistsMap.containsKey(dbTable)){
+                    tableExistsMap.put(dbTable, true);
+                }
+            }
+
+            statement = connection.createStatement();
+            for(Map.Entry<DBTables, Boolean> table : tableExistsMap.entrySet()){
+                if(!table.getValue()){
+                    statement.executeUpdate(table.getKey().getCreateTableSQL());
+                }
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }finally {
+            try {
+                if(resultSet != null){
+                    resultSet.close();
+                }
+
+                if(connection != null){
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public static Connection getConnection() throws SQLException {
+        return DriverManager.getConnection(connectionURI, userName, userPassword);
+    }
+
+    public static int addUser (User user) throws SQLException{
+        Connection connection = getConnection();
+        Statement statement = connection.createStatement();
+        int res = statement.executeUpdate("INSERT INTO " + DBTables.USERS.getTableName() +
+                                            " (email, registration_date, password) " +
+                                            "VALUES ('" + user.getMail() + "', " + user.getRegistrationDate().getTime() + ", '" + user.getPassword() + "')");
+
+        connection.close();
+
+        return res;
+    }
+
+    public static User getUser (String email) throws SQLException{
+        User user = null;
+        Connection connection = getConnection();
+        Statement statement = connection.createStatement();
+        ResultSet resultSet = statement.executeQuery("SELECT * FROM " + DBTables.USERS + " WHERE email='" + email + "';");
+        String userEmail = "";
+        String userPassword = "";
+        long userRegistrationDate = 0L;
+
+        if(resultSet.next()){
+            userEmail = resultSet.getString("email");
+            userPassword = resultSet.getString("password");
+            userRegistrationDate = resultSet.getBigDecimal("registration_date").longValue();
+        }
+
+        resultSet.close();
+        connection.close();
+
+        if(!userEmail.equals("") && !userPassword.equals("") && userRegistrationDate != 0L){
+            return new User(userEmail, userPassword, userRegistrationDate);
+        }
+
         return null;
     }
+
 }

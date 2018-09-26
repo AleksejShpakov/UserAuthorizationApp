@@ -1,7 +1,5 @@
 package servlets;
 
-import entity.User;
-import org.json.JSONArray;
 import org.json.JSONObject;
 import services.AuthorizationService;
 
@@ -12,8 +10,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.lang.reflect.Method;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.sql.SQLException;
 
 public class AuthorizationPage extends HttpServlet {
 
@@ -26,9 +23,9 @@ public class AuthorizationPage extends HttpServlet {
     }
 
     private void execute(HttpServletRequest request, HttpServletResponse response){
-        JSONObject outJSONObject = new JSONObject();
-        String methodName = "";
-        Method method = null;
+        JSONObject outJSONObject;
+        String methodName;
+        Method method;
 
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
@@ -61,6 +58,7 @@ public class AuthorizationPage extends HttpServlet {
         }
     }
 
+    @SuppressWarnings("unused")
     private JSONObject showPage(HttpServletRequest request, HttpServletResponse response){
         JSONObject outJSONObject = new JSONObject();
 
@@ -68,15 +66,14 @@ public class AuthorizationPage extends HttpServlet {
 
         try {
             requestDispatcher.forward(request, response);
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (ServletException e) {
+        } catch (IOException | ServletException e) {
             e.printStackTrace();
         }
 
         return outJSONObject;
     }
 
+    @SuppressWarnings("unused")
     private JSONObject authorize(HttpServletRequest request, HttpServletResponse response) {
         JSONObject outJSONObject = new JSONObject();
         String eMail;
@@ -88,7 +85,11 @@ public class AuthorizationPage extends HttpServlet {
         password = request.getParameter("password");
         sessionID = request.getSession().getId();
 
-        successAuthorization = AuthorizationService.getInstance().authorize(eMail, password, sessionID);
+        try {
+            successAuthorization = AuthorizationService.getInstance().authorize(eMail, password, sessionID);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
 
         if(successAuthorization){
             outJSONObject.put("authorized", true);

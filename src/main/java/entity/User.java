@@ -14,6 +14,12 @@ public class User {
         this.registrationDate = new Timestamp(System.currentTimeMillis());
     }
 
+    public User(String eMail, String password, long registrationDate) {
+        this.eMail = eMail;
+        this.password = password;
+        this.registrationDate = new Timestamp(registrationDate);
+    }
+
     public String getMail(){
         return this.eMail;
     }
@@ -33,7 +39,7 @@ public class User {
 
     @Override
     public boolean equals(Object obj) {
-        User user = null;
+        User user;
 
         if(obj == this)
             return true;

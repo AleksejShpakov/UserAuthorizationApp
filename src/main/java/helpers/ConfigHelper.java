@@ -1,9 +1,5 @@
 package helpers;
 
-import org.w3c.dom.Element;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
-
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.net.URL;
@@ -13,9 +9,9 @@ public class ConfigHelper {
     private ConfigHelper(){}
 
     public static synchronized File getConfigFile(String filePath) throws FileNotFoundException {
-        File file = null;
-        ClassLoader classLoader = null;
-        URL url = null;
+        File file;
+        ClassLoader classLoader;
+        URL url;
 
         if (filePath == null || filePath.equals("")){
             throw new NullPointerException("file path is null");
@@ -23,6 +19,11 @@ public class ConfigHelper {
 
         classLoader = Thread.currentThread().getContextClassLoader();
         url = classLoader.getResource(filePath);
+
+        if(url == null){
+            System.err.println("Can't get url of config db file!");
+            return null;
+        }
 
         file = new File(url.getPath());
         if (!file.exists() || !file.isFile()){

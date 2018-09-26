@@ -6,32 +6,32 @@ import entity.User;
 import org.json.JSONObject;
 import services.AuthorizationService;
 
-import javax.servlet.RequestDispatcher;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.sql.SQLException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class RegistrationPage extends HttpServlet{
 
     @Override
-    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp){
         execute(req, resp);
     }
 
     @Override
-    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) {
         execute(req, resp);
     }
 
     private void execute(HttpServletRequest request, HttpServletResponse response){
-        JSONObject outJSONObject = new JSONObject();
-        String methodName = "";
-        Method method = null;
+        JSONObject outJSONObject;
+        String methodName;
+        Method method;
 
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
@@ -64,23 +64,23 @@ public class RegistrationPage extends HttpServlet{
         }
     }
 
+    @SuppressWarnings("unused")
     private JSONObject showPage(HttpServletRequest request, HttpServletResponse response){
         JSONObject outJSONObject = new JSONObject();
 
         try {
             request.getRequestDispatcher("views/RegistrationPage.jsp").forward(request, response);
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (ServletException e) {
+        } catch (IOException | ServletException e) {
             e.printStackTrace();
         }
 
         return outJSONObject;
     }
 
+    @SuppressWarnings("unused")
     private JSONObject register(HttpServletRequest request, HttpServletResponse response) {
         JSONObject outJSONObject = new JSONObject();
-        User user = null;
+        User user;
         String eMail;
         String password;
         String sessionID;
@@ -89,28 +89,30 @@ public class RegistrationPage extends HttpServlet{
         password = request.getParameter("password");
         sessionID = request.getSession().getId();
 
-        if( AuthorizationService.getInstance().isExist(eMail) ){
-            outJSONObject.put("status", Status.ERROR);
-            outJSONObject.put("message", Error.EMAIL_ALREADY_EXISTS.message());
-            outJSONObject.put("code", Error.EMAIL_ALREADY_EXISTS.code());
-
-            return outJSONObject;
-        }else{
-            if(!isCorrectPassword(password)){
+        try {
+            if (AuthorizationService.getInstance().isExist(eMail)) {
                 outJSONObject.put("status", Status.ERROR);
-                outJSONObject.put("message", Error.PASSWORD_IS_INCORRECT.message());
-                outJSONObject.put("code", Error.PASSWORD_IS_INCORRECT.code());
+                outJSONObject.put("message", Error.EMAIL_ALREADY_EXISTS.message());
+                outJSONObject.put("code", Error.EMAIL_ALREADY_EXISTS.code());
 
                 return outJSONObject;
+            } else {
+                if (!isCorrectPassword(password)) {
+                    outJSONObject.put("status", Status.ERROR);
+                    outJSONObject.put("message", Error.PASSWORD_IS_INCORRECT.message());
+                    outJSONObject.put("code", Error.PASSWORD_IS_INCORRECT.code());
+
+                    return outJSONObject;
+                }
+
+                user = new User(eMail, password);
+                AuthorizationService.getInstance().addUser(user);
+                AuthorizationService.getInstance().authorize(eMail, password, sessionID);
+                outJSONObject.put("status", Status.SUCCESS);
             }
-
-            user = new User(eMail, password);
-            AuthorizationService.getInstance().addUser(user);
-            AuthorizationService.getInstance().authorize(eMail, password, sessionID);
-
-            outJSONObject.put("status", Status.SUCCESS);
+        }catch (SQLException ex){
+            ex.printStackTrace();
         }
-
         return outJSONObject;
     }
 
